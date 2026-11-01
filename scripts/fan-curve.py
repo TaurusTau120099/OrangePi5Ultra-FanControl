@@ -1,44 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fan-curve.py —— 安全地修改 Orange Pi (RK3588) 的 pwm-fan 温控曲线
-
-设计目标：干掉"改了半天其实没生效 / 改错数值还不知道"这两类事故。
+fan-curve.py —— 修改 Orange Pi (RK3588) 的 pwm-fan 温控曲线
 
 用法
 ----
-先看当前曲线（只读，不做任何修改）：
-    sudo ./fan-curve.py --show
+    sudo ./fan-curve.py --show                    # 查看当前曲线（只读）
+    sudo ./fan-curve.py --set "0:0,65:160,80:255" # 试算，不写盘
+    sudo ./fan-curve.py --set "0:0,65:160,80:255" --apply   # 写入
+    sudo ./fan-curve.py --set "..." --freq 100 --apply      # 同时改频率
+    sudo ./fan-curve.py --restore                 # 回滚到最近一次备份
 
-试算新曲线（只打印，不写盘）：
-    sudo ./fan-curve.py --set "0:0,65:160,68:180,71:200,74:220,77:240,80:255"
+`--set` 格式为 `温度:PWM` 逗号分隔。温度单位 °C，可为小数；PWM 取值 0..255。
+脚本会自动排序并保证 cooling-levels 下标与 temp-trips 档位一一对应
+（两者错位是手改 DTB 最常见的问题），编译后反解校验数值，不通过则不写盘。
 
-确认无误后真正写入：
-    sudo ./fan-curve.py --set "0:0,65:160,68:180,71:200,74:220,77:240,80:255" --apply
-
-顺手改 PWM 频率（可选）：
-    sudo ./fan-curve.py --set "..." --freq 100 --apply
-
-回滚：
-    sudo ./fan-curve.py --restore            # 恢复最近一次备份
-    ls /root/fan-curve-backup/               # 所有备份
-
-`--set` 的格式是 `温度°C:PWM` 的逗号分隔列表：
-    * 温度单位是摄氏度，可以是小数（0.5 会四舍五入到毫摄氏度）
-    * PWM 是 0..255 的整数
-    * 内部会自动排序，并保证 cooling-levels 的下标与 temp-trips 的 state 一一对应
-      （这两者错位是手改 DTB 最常见的坑）
-
-为什么默认改 /boot/dtb/rockchip/... 而不是 /boot/dtb-<版本>/...
--------------------------------------------------------------
-u-boot 的 boot.scr 里写的是：
-    load ${devtype} ${devnum} ${fdt_addr_r} ${prefix}dtb/${fdtfile}
-其中 fdtfile 来自 /boot/orangepiEnv.txt。所以真正被加载的是
-    <启动分区>/dtb/rockchip/<fdtfile>
-当 /boot 是 vfat 时，"dtb" 是实体目录（vfat 不支持符号链接），
-它和 dtb-<版本>/ 是两份互相独立的拷贝，改后者不会生效。
-当 /boot 是 ext4 时，"dtb" 通常是指向 dtb-<版本>/ 的符号链接，改哪边都一样。
-统一改 /boot/dtb/... 在两种情况下都正确。
+默认目标是 /boot/dtb/rockchip/rk3588-orangepi-5-ultra.dtb，而非
+/boot/dtb-<版本>/ 下的同名文件 —— 后者在 vfat 的 /boot 上不会被 u-boot 读取。
+详见 README 第一节。
 """
 
 import argparse
